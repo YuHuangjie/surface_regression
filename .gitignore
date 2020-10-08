@@ -1,0 +1,8 @@
+data/
+__pycache__/
+views_np/
+*.jpg
+*.png
+*.mp4
+*.so
+*.o
