@@ -82,8 +82,8 @@ class BlenderSurfaceDataset(torch.utils.data.Dataset):
             imagepath = os.path.join(self.datadir, f'{id}.0000.png')
             I = imageio.imread(imagepath, pilmode='RGB')
             I = (np.array(I) / 255.).astype(np.float32)
-            if not I.shape[:2] == [self.H, self.W]:
-                I = cv2.resize(I, (self.H, self.W), interpolation=cv2.INTER_LINEAR)
+            if not I.shape[:2] == (self.H, self.W):
+                I = cv2.resize(I, (self.W, self.H), interpolation=cv2.INTER_LINEAR)
             self.labels[id] = I.reshape((-1, 3))
 
         # pre-render depths

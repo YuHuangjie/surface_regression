@@ -25,6 +25,7 @@ for i, (local_batch, local_labels, mask) in enumerate(tqdm(training_generator)):
         with open(os.path.join('views_np', f'{i}.npy'), 'wb') as f:
                 np.save(f, local_batch)
                 np.save(f, local_labels)
+                np.save(f, mask)
         
 test_set = DslfSurfaceDataset(data_dir, rdwrapper, \
         partition['test'], 'profile.txt', dsize=dsize)

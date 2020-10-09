@@ -119,8 +119,8 @@ class DslfSurfaceDataset(torch.utils.data.Dataset):
             imagepath = self.list_images[id]
             I = imageio.imread(imagepath, pilmode='RGB')
             I = (np.array(I) / 255.).astype(np.float32)
-            if not I.shape[:2] == [self.H, self.W]:
-                I = cv2.resize(I, (self.H, self.W), interpolation=cv2.INTER_LINEAR)
+            if not I.shape[:2] == (self.H, self.W):
+                I = cv2.resize(I, (self.W, self.H), interpolation=cv2.INTER_LINEAR)
             self.labels[id] = I.reshape((-1, 3))
 
         # pre-render depths
@@ -143,7 +143,7 @@ class DslfSurfaceDataset(torch.utils.data.Dataset):
         depth = self.depths[id]
         c2w = self.list_poses[id]
         K = self.list_Ks[id]
-        imageio.imwrite(f'test.png', depth.reshape((self.H, self.W)))
+        # imageio.imwrite(f'test.png', depth.reshape((self.H, self.W)))
 
         # constructing xyz coordinates
         ucoords = np.arange(self.W, dtype=np.float32)
