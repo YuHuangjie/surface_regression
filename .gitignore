@@ -1,6 +1,6 @@
 data/
 __pycache__/
-views_np/
+training_data/
 *.jpg
 *.png
 *.mp4

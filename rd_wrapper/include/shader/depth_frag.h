@@ -13,7 +13,7 @@ const char *depth_fragment_code =
 "	vec4 vertexInCameraSpace = V * vec4(vertex_position, 1.f);\n"
 "	float depth = vertexInCameraSpace.z; \n"
 "	int idepth = int(-depth * 1000); \n"
-"	color = vec4(idepth & 0xFF, (idepth >> 8)&0xFF, (idepth >> 16)&0xFF, 255.f);\n"
+"	color = vec4(idepth & 0xFF, (idepth >> 8)&0xFF, (idepth >> 16)&0xFF, (idepth >> 24)&0xFF);\n"
 "   color /= 255.f; \n"
 
 // Render label

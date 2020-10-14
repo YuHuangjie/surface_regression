@@ -141,6 +141,7 @@ int rd_init_gl_context(int width, int height)
                 EGL_RED_SIZE, 8,
                 EGL_GREEN_SIZE, 8,
                 EGL_BLUE_SIZE, 8,
+                EGL_ALPHA_SIZE, 8,
                 EGL_DEPTH_SIZE, 8,
                 EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
                 EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
@@ -365,11 +366,8 @@ int rd_render(int context, float *buf, size_t szbuf,
         }
         // decode to float
         for (int i = 0; i < CAMERA_WIDTH * CAMERA_HEIGHT; i++) {
-                uint8_t cr = *src;
-		uint8_t cg = *(src + 1);
-                uint8_t cb = *(src + 2);
                 // the 1000.f is hardcoded in depth shader
-                *buf = static_cast<float>((int)cr + ((int)cg << 8) + ((int)cb << 16)) / 1000.f;
+                *buf = static_cast<float>(*reinterpret_cast<int*>(src)) / 1000.f;
                 buf++;
                 src += 4;
         }

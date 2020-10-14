@@ -116,6 +116,8 @@ void Renderer::Render(void)
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);  
+	glCullFace(GL_BACK);
 	glDisable(GL_MULTISAMPLE);
 	glUseProgram(mShader.ID);
 
