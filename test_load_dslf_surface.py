@@ -8,21 +8,23 @@ import numpy as np
 # load depth render library
 data_dir = 'data/tangsancai'
 obj_path = os.path.join(data_dir, 'obj/mesh_regi.obj')
-dsize = [250, 400]
+dsize = [400, 640]
 rdwrapper = rd_wrapper(*dsize, obj_path)
 
-partition = {'train': [f'{i}' for i in range(369)], 
-             'test': [f'{i}' for i in range(369, 370)]}
+partition = {'train': [f'{i}' for i in range(530)], 
+             'test': [f'{i}' for i in range(530, 1127)]}
 
 params = {'shuffle': False,
           'num_workers': 1}
+os.makedirs('training_data', exist_ok=True)
 
 training_set = DslfSurfaceDataset(data_dir, rdwrapper, \
         partition['train'], 'profile.txt', dsize=dsize)
 training_generator = torch.utils.data.DataLoader(training_set, **params)
 
 for i, (local_batch, local_labels, mask) in enumerate(tqdm(training_generator)):
-        with open(os.path.join('views_np', f'{i}.npy'), 'wb') as f:
+        with open(os.path.join('training_data', f'{i}.npy'), 'wb') as f:
+                local_batch[0, :, :3] /= 800
                 np.save(f, local_batch)
                 np.save(f, local_labels)
                 np.save(f, mask)
@@ -32,7 +34,8 @@ test_set = DslfSurfaceDataset(data_dir, rdwrapper, \
 test_generator = torch.utils.data.DataLoader(test_set, **params)
 
 for i, (local_batch, local_labels, mask) in enumerate(tqdm(test_generator)):
-        with open(os.path.join('views_np', f'test{i}.npy'), 'wb') as f:
+        with open(os.path.join('training_data', f'test{i}.npy'), 'wb') as f:
+                local_batch[0, :, :3] /= 800
                 np.save(f, local_batch)
                 np.save(f, local_labels)
                 np.save(f, mask)

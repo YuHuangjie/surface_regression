@@ -11,27 +11,33 @@ import os, imageio
 import time
 
 from rd_wrapper import rd_wrapper
-from load_blender_surface import BlenderSurfaceDataset
+# from load_blender_surface import BlenderSurfaceDataset
+from load_dslf_surface import DslfSurfaceDataset
 
-device = torch.device('cuda', 0)
+device = torch.device('cuda', 1)
 
-obj_path = 'data/lucy2/lucy.obj'
-dsize = [512, 512]
-data_dir = 'data/lucy2'
+obj_path = 'data/tangsancai/obj/mesh_regi.obj'
+dsize = [400, 640]
+data_dir = 'data/tangsancai'
+exp_dir = 'exp/tangsancai'
 
 # Set up depth rendering engine
 rdwrapper = rd_wrapper(*dsize, obj_path)
 
 # Set up training/testing data
-partition = {'train': [f'./train/r_{i}' for i in range(100)],
-             'test': [f'./test/r_{i}' for i in [90]]}
-params = {'shuffle': True,
+partition = {'train': [f'{i}' for i in np.random.choice(range(530), 150, False)],
+             'test': [f'{i}' for i in range(530, 580)]}
+train_params = {'shuffle': True,
+          'num_workers': 1,}
+test_params = {'shuffle': False,
           'num_workers': 1,}
 training_limit=350000
-training_set = BlenderSurfaceDataset(data_dir, rdwrapper, partition['train'], 'transforms_train.json', limit=training_limit, dsize=dsize)
-training_generator = torch.utils.data.DataLoader(training_set, **params)
-test_set = BlenderSurfaceDataset(data_dir, rdwrapper, partition['test'], 'transforms_test.json', dsize=dsize)
-test_generator = torch.utils.data.DataLoader(test_set, **params)
+# training_set = BlenderSurfaceDataset(data_dir, rdwrapper, partition['train'], 'transforms_train.json', limit=training_limit, dsize=dsize)
+training_set = DslfSurfaceDataset(data_dir, rdwrapper, partition['train'], 'profile.txt', limit=training_limit, dsize=dsize)
+training_generator = torch.utils.data.DataLoader(training_set, **train_params)
+# test_set = BlenderSurfaceDataset(data_dir, rdwrapper, partition['test'], 'transforms_test.json', dsize=dsize)
+test_set = DslfSurfaceDataset(data_dir, rdwrapper, partition['test'], 'profile.txt', dsize=dsize)
+test_generator = torch.utils.data.DataLoader(test_set, **test_params)
 
 # Fourier feature mapping
 def input_mapping(x, B): 
@@ -74,7 +80,7 @@ def make_network(D, W, input_size, input_size_view):
 def train_model(D, W, learning_rate, epochs, B, B_view, input_dim, input_dim_view, training_generator, test_generator):
     
     model_pred = lambda model, x: model(torch.cat(
-        [input_mapping(x[:,:,:input_dim], B), input_mapping(x[:,:,input_dim:], B_view)], -1))
+        [input_mapping(x[:,:,:input_dim]/800, B), input_mapping(x[:,:,input_dim:], B_view)], -1))
     model_loss_pred = lambda pred, y: .5 * torch.mean((pred - y) ** 2)
     model_loss = lambda model, x, y: .5 * torch.mean((model_pred(model, x) - y) ** 2)
     model_psnr_loss = lambda loss : -10. * torch.log10(2.*loss)
@@ -106,29 +112,29 @@ def train_model(D, W, learning_rate, epochs, B, B_view, input_dim, input_dim_vie
         if i==0 or i % 100 != 0:
             continue
         train_psnrs.append(model_psnr_loss(torch.Tensor([total_loss])))
-        with torch.no_grad():
-            pred_img = []
-            for local_batch, local_labels, mask in test_generator:
-                local_batch, local_labels = local_batch.to(device), local_labels.to(device)
-                y = model_pred(model, local_batch)
-                img = torch.ones((dsize[0]*dsize[1], 3))
-                img[torch.squeeze(mask)] = y.cpu()
-                pred_img.append(img.reshape(dsize + [3]))
+        xs.append(i)
+
+    with torch.no_grad():
+        for local_batch, local_labels, mask in test_generator:
+            local_batch, local_labels = local_batch.to(device), local_labels.to(device)
+            y = model_pred(model, local_batch)
+            img = torch.zeros((dsize[0]*dsize[1], 3))
+            img[torch.squeeze(mask)] = y.cpu()
+            pred_imgs.append(img.reshape(dsize + [3]))
             test_psnrs.append(model_psnr_loss(model_loss_pred(y, local_labels)))
-            pred_imgs.append(torch.stack(pred_img))
-            xs.append(i)
                 
     return {
         'train_psnrs': train_psnrs,
         'test_psnrs': test_psnrs,
         'pred_imgs' : torch.stack(pred_imgs),
         'xs': xs,
+        'model': model,
     }
 
 network_size = (8, 256)
 # network_size_view = (1, 128)
 learning_rate = 1e-4
-epochs = 3001
+epochs = 2000
 posenc_scale = 6
 mapping_size = 256
 mapping_size_view = 256
@@ -180,24 +186,21 @@ outputs = {}
 for k in tqdm(B_dict):
     outputs[k] = train_model(*network_size, learning_rate, epochs, B_dict[k], B_view_dict[k], 
                              input_dim, input_dim_view, training_generator, test_generator)
-    I = outputs[k]['pred_imgs'][-1].numpy() * 255.
-    I = np.squeeze(np.clip(I, 0, 255).astype(np.uint8))
-    imageio.imwrite(f'{k}-{network_size[0]}-{network_size[1]}-{dsize[0]}.jpg', I)
 
-# Show final network outputs
+    # Save predicted images
+    imgs = outputs[k]['pred_imgs'].numpy() * 255.
+    imgs = np.clip(imgs, 0, 255).astype(np.uint8)
+    output_dir = f'{exp_dir}/{k}'
+    os.makedirs(output_dir, exist_ok=True)
+    for i, img in enumerate(imgs):
+        imageio.imwrite(f'{output_dir}/{i}.png', img)
 
-plt.figure(figsize=(26,26))
-N = len(outputs)
-for i, k in enumerate(outputs):
-    cols = 3
-    rows = (N+1+cols) // cols
-    plt.subplot(rows,cols,i+1)
-    plt.imshow((np.clip(outputs[k]['pred_imgs'][-1,0].numpy(),0,1)*255).astype(np.uint8))
-    plt.title(k)
-# plt.subplot(rows,cols,N+1)
-# plt.imshow(img)
-# plt.title('GT')
-plt.savefig('surface-regression-pred-images.png')
+    # save model
+    save_dict = outputs[k]['model'].state_dict()
+    save_dict['B'] = B_dict[k]
+    save_dict['B_view'] = B_view_dict[k]
+    save_dict['network_size'] = network_size
+    torch.save(save_dict, f'{output_dir}/model.pt')
 
 # Plot train/test error curves
 
@@ -213,10 +216,10 @@ plt.legend()
 
 plt.subplot(122)
 for i, k in enumerate(outputs):
-    plt.plot(outputs[k]['xs'], outputs[k]['test_psnrs'], label=k)
+    plt.plot(outputs[k]['test_psnrs'], label=k)
 plt.title('Test error')
 plt.ylabel('PSNR')
 plt.xlabel('Training iter')
 plt.legend()
 
-plt.savefig('surface-regression-psnr.png')
+plt.savefig(f'{exp_dir}/surface-regression-psnr.png')
