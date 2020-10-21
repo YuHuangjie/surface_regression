@@ -7,7 +7,7 @@
 #pragma warning(disable : 4267)
 
 Renderer::Renderer()
-	: mNear(0.01f),
+	: mNear(0.1f),
 	mFar(10000.f),
 	mnMeshes(0),
 	mVertexArray(nullptr),
