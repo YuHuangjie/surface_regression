@@ -6,7 +6,7 @@ import numpy as np
 
 RAW_INPUT_SIZE = 3
 RAW_INPUT_VIEW_SIZE = 3
-RAW_INPUT_SCALE = 1/800
+RAW_INPUT_SCALE = 1/1
 
 # Fourier feature mapping
 def input_mapping(x, B): 
