@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm as tqdm
 import os, imageio
 import time
+import cv2
 
 from rd_wrapper import rd_wrapper
 from load_approx_res import ApproxResSurfaceDataset as Dataset
@@ -15,10 +16,13 @@ from model import *
 
 device = torch.device('cuda', 1)
 
-obj_path = 'data/lucy/lucy-sh.obj'
-dsize = [1024, 1024]
-data_dir = 'data/lucy'
-exp_dir = 'exp/lucy'
+datatype = 'blender'    # 'blender' or 'dslf'
+expname = 'hotdog'     # dataset identifier
+maxL = 3                # maximum order of SH basis
+dsize = [1024, 1024]   
+obj_path = f'data/{expname}/{expname}-sh.obj'
+data_dir = f'data/{expname}'
+exp_dir = f'exp/{expname}-L{maxL}'
 
 # Set up training/testing data
 partition = {'train': [f'./train/r_{i}' for i in range(800)], 
@@ -28,10 +32,12 @@ train_params = {'shuffle': True,
 test_params = {'shuffle': False,
           'num_workers': 1,}
 
-training_set = Dataset('blender', data_dir, obj_path, partition['train'], 'transforms_train.json', need_residual=True)
+training_set = Dataset(datatype, data_dir, obj_path, partition['train'], 
+                    'transforms_train.json', need_residual=True, L=maxL)
 training_generator = torch.utils.data.DataLoader(training_set, **train_params)
 
-test_set = Dataset('blender', data_dir, obj_path, partition['test'], 'transforms_test.json', need_residual=True)
+test_set = Dataset(datatype, data_dir, obj_path, partition['test'], 
+                    'transforms_test.json', need_residual=True, L=maxL)
 test_generator = torch.utils.data.DataLoader(test_set, **test_params)
 
 def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
@@ -55,10 +61,9 @@ def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
             optimizer.step()
             total_loss += float(loss)
 
-        if i==0 or i % 100 != 0:
-            continue
-        train_psnrs.append(model_psnr(torch.Tensor([total_loss/len(training_generator)])))
-        xs.append(i)
+        if (i % 100 == 0 and i != 0) or i == epochs-1:
+            train_psnrs.append(model_psnr(torch.Tensor([total_loss/len(training_generator)])))
+            xs.append(i)
 
     return {
         'train_psnrs': train_psnrs,
@@ -68,7 +73,7 @@ def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
 
 network_size = (8, 256)
 learning_rate = 1e-4
-epochs = 1500
+epochs = 800
 posenc_scale = 6
 mapping_size = 256
 mapping_size_view = 256
@@ -118,10 +123,19 @@ for k in tqdm(B_dict):
     outputs[k] = train_model(*network_size, learning_rate, epochs, B_dict[k], B_view_dict[k], 
                              training_generator)
 
-    # Make and save predicted images
+    # save model
     model = outputs[k]['model']
     output_dir = f'{exp_dir}/{k}/test'
     os.makedirs(output_dir, exist_ok=True)
+    
+    save_dict = model.state_dict()
+    save_dict['D'] = model.D
+    save_dict['W'] = model.W
+    save_dict['B'] = model.B
+    save_dict['B_view'] = model.B_view
+    torch.save(save_dict, f'{output_dir}/model.pt')
+
+    # Make and save predicted images
     outputs[k]['test_psnrs'] = []
 
     with torch.no_grad():
@@ -133,16 +147,9 @@ for k in tqdm(B_dict):
             img = np.clip(img.numpy() * 255., 0, 255).astype(np.uint8)
             img = img.reshape(dsize + [3])
 
-            imageio.imwrite(f'{output_dir}/{i}.png', img)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            assert(cv2.imwrite(f'{output_dir}/{i}.png', img))
             outputs[k]['test_psnrs'].append(model_psnr(model_loss(y, residual)).cpu().numpy())
-
-    # save model
-    save_dict = model.state_dict()
-    save_dict['D'] = model.D
-    save_dict['W'] = model.W
-    save_dict['B'] = model.B
-    save_dict['B_view'] = model.B_view
-    torch.save(save_dict, f'{output_dir}/model.pt')
 
     # save test psnrs
     np.save(f'{output_dir}/test_psnr.npy', outputs[k]['test_psnrs'])

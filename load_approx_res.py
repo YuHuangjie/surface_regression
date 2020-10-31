@@ -13,7 +13,7 @@ from rd_wrapper import rd_wrapper
 from rsh_wrapper import rsh_wrapper
 
 class ApproxResSurfaceDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset, datadir, objmesh, list_ids, profile_file, need_residual=False, dsize=None):
+    def __init__(self, dataset, datadir, objmesh, list_ids, profile_file, need_residual=False, dsize=None, L=-1):
         super(ApproxResSurfaceDataset).__init__()
 
         self.list_ids = list_ids
@@ -72,7 +72,7 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
             c2w = self.list_c2ws[id]
             K = self.list_Ks[id]
             approx = np.zeros((self.H*self.W, 3), dtype=np.uint8)
-            rshwrapper.render_approx(c2w, K, approx)
+            rshwrapper.render_approx(c2w, K, approx, L)
             self.approx[id] = approx.astype(np.float32) / 255.
 
         # compute residual
@@ -122,17 +122,19 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
         if self.need_residual:
             return (self.x_trains[id].astype(np.float32), 
                 self.residuals[id][mask].astype(np.float32), 
-                self.masks[id].astype(np.float32), 
+                self.masks[id], 
                 self.approx[id][mask].astype(np.float32))
         else:
             return (self.x_trains[id].astype(np.float32), 
                 np.zeros_like(self.approx[id][mask], dtype=np.float32), 
-                self.masks[id].astype(np.float32), 
+                self.masks[id], 
                 self.approx[id][mask].astype(np.float32))
 
-# # load depth render library
-# data_dir = 'data/lucy'
-# obj_path = os.path.join(data_dir, 'lucy-sh.obj')
+# # How to use this script
+# # ------
+# data_dir = 'data/leather'
+# obj_path = os.path.join(data_dir, 'leather-sh.obj')
+# L = 0
 # dsize = [1024, 1024]
 
 # partition = {'train': [f'./train/r_{i}' for i in range(800)], 
@@ -141,23 +143,27 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
 #           'num_workers': 1}
 
 # training_set = ApproxResSurfaceDataset('blender', data_dir, obj_path, \
-#         partition['train'], 'transforms_train.json', need_residual=True)
+#         partition['train'], 'transforms_train.json', need_residual=True, L=L)
 # training_generator = torch.utils.data.DataLoader(training_set, **params)
 
 # for i, (x, residual, mask, approx) in enumerate(tqdm(training_generator)):
 #     I = np.zeros((dsize[0]*dsize[1], 3))
 #     I[mask[0]] = np.abs(residual[0]) * 255
 #     I = I.astype(np.uint8).reshape((dsize[0], dsize[1], 3))
-#     cv2.cvtColor(I, cv2.COLOR_BGR2RGB, I)
-#     cv2.imwrite(f'test/{i}.png', I)
+#     I = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)
+#     assert(cv2.imwrite(f'test/{i}.png', I))
 
 # test_set = ApproxResSurfaceDataset('blender', data_dir, obj_path, \
-#         partition['test'], 'transforms_test.json', need_residual=True, dsize=dsize)
+#         partition['test'], 'transforms_test.json', need_residual=True, dsize=dsize, L=L)
 # test_generator = torch.utils.data.DataLoader(test_set, **params)
+# psnrs = np.zeros((len(partition['test']),))
 
 # for i, (x, residual, mask, approx) in enumerate(tqdm(test_generator)):
 #     I = np.zeros((dsize[0]*dsize[1], 3))
 #     I[mask[0]] = np.abs(approx[0]) * 255
 #     I = I.astype(np.uint8).reshape((dsize[0], dsize[1], 3))
-#     cv2.cvtColor(I, cv2.COLOR_BGR2RGB, I)
-#     cv2.imwrite(f'test/test_{i}.png', I)
+#     I = cv2.cvtColor(I, cv2.COLOR_BGR2RGB)
+#     assert(cv2.imwrite(f'test/test_{i}.png', I))
+    
+#     mse = .5 * .5 * torch.mean(residual ** 2)
+#     psnrs[i] = -10. * torch.log10(2.*mse)

@@ -16,7 +16,7 @@ public:
 	Renderer();
 	virtual ~Renderer();
 
-	void Render(void);
+	void Render(int L=-1);
 	void SetGeometries(const std::vector<Geometry> &);
 	void SetCamera(const Camera &);
 	void ScreenShot(unsigned char *buffer, unsigned int x, unsigned int y,
@@ -28,6 +28,7 @@ private:
 	float mFar;
 
 	/* order of Spherical Harmonics basis */
+	int mMaxL;
 	int mL;
 
 	/* Drawing option */

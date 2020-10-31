@@ -21,10 +21,10 @@ class rsh_wrapper:
                 renderlib.rsh_destroy_gl_context.restype = c_int
                 renderlib.rsh_destroy_gl_context.argtypes = [c_int]
 
-                # unsigned char *rsh_render(int context, float *extrinsic, float *intrinsic, size_t sze, size_t szi)
+                # unsigned char *rsh_render(int context, float *extrinsic, float *intrinsic, size_t sze, size_t szi, int L)
                 renderlib.rsh_render.restype = c_int
                 renderlib.rsh_render.argtypes = [c_int, POINTER(c_uint8), c_size_t, 
-                        POINTER(c_float), POINTER(c_float), c_size_t, c_size_t]
+                        POINTER(c_float), POINTER(c_float), c_size_t, c_size_t, c_int]
 
                 c = renderlib.rsh_init_gl_context(width, height)
                 if c < 0:
@@ -41,13 +41,14 @@ class rsh_wrapper:
                 self.renderlib.rsh_destroy_renderer(self.context)
                 self.renderlib.rsh_destroy_gl_context(self.context)
 
-        def render_approx(self, c2w, K, buffer):
+        def render_approx(self, c2w, K, buffer, L=-1):
                 if not buffer.dtype == np.uint8:
                         raise Exception('need float32 buffer')
                 extrinsic = (c_float*16)(*c2w.reshape(-1).tolist())
                 intrinsic = (c_float*9)(*K.reshape(-1).tolist())
                 r = self.renderlib.rsh_render(self.context, buffer.ctypes.data_as(POINTER(c_uint8)), 
-                        buffer.size, extrinsic, intrinsic, len(extrinsic), len(intrinsic))
+                        buffer.size, extrinsic, intrinsic, len(extrinsic), len(intrinsic),
+                        c_int(L))
                 if r < 0:
                         raise Exception('rsh_render fail')
 

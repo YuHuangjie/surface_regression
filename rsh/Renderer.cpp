@@ -9,6 +9,7 @@
 Renderer::Renderer()
 	: mNear(0.1f),
 	mFar(10.f),	// change accordingly
+	mMaxL(0),
 	mL(0),
 	mnMeshes(0),
 	mVertexArray(nullptr),
@@ -66,10 +67,10 @@ void Renderer::SetGeometries(const std::vector<Geometry> &geometries)
 		DrawOption option = geometries[i].GetDrawOption();
 		int nva = geometries[i].nVertexAttribs;
 
-		if (nva == 6) mL = 0;
-		else if (nva == 15) mL = 1;
-		else if (nva == 30) mL = 2;
-		else if (nva == 51) mL = 3;
+		if (nva == 6) mMaxL = 0;
+		else if (nva == 15) mMaxL = 1;
+		else if (nva == 30) mMaxL = 2;
+		else if (nva == 51) mMaxL = 3;
 		else throw runtime_error("wrong number of vertex attributes");
 
 		if (option == DrawOption::Array) {
@@ -108,15 +109,15 @@ void Renderer::SetGeometries(const std::vector<Geometry> &geometries)
 		// coefficients of order 0 SH
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, nva*sizeof(float), (void*)(3*sizeof(float)));
 
-		if (mL >= 1) {
+		if (mMaxL >= 1) {
 			int vab = 2;
-			int vae = (mL == 1 ? 4 : 9);
+			int vae = (mMaxL == 1 ? 4 : 9);
 			for (int j = vab; j <= vae; j++) {
 				glVertexAttribPointer(j, 3, GL_FLOAT, GL_FALSE, nva*sizeof(float), (void*)(3*j*sizeof(float)));
 				glEnableVertexAttribArray(j);
 			}
 		}
-		if (mL == 3) {
+		if (mMaxL == 3) {
 			int vab = 10;
 			int vae = 15;
 			int p = 30;
@@ -143,7 +144,10 @@ void Renderer::SetGeometries(const std::vector<Geometry> &geometries)
 	mnMeshes = geometries.size();
 }
 
-void Renderer::Render(void)
+/*
+  @L	order of SH to use. If L = -1, use as many orders as stored
+ */
+void Renderer::Render(int L)
 {
 	glCullFace(GL_BACK);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -159,6 +163,7 @@ void Renderer::Render(void)
 	glm::vec3 cam_pos = mCamera.GetPosition();
 	glUniformMatrix4fv(mVPLocation, 1, GL_FALSE, &VP[0][0]);
 	glUniform3f(mCamPosLocation, cam_pos.x, cam_pos.y, cam_pos.z);
+	mL = (L == -1 ? mMaxL : min(L, mMaxL));
 	glUniform1i(mLLocation, mL);
 
 	for (size_t i = 0; i != mnMeshes; ++i) {

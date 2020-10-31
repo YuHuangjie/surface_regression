@@ -222,7 +222,7 @@ int rsh_destroy_gl_context(int context)
  * be protected by mutual exclusion.
  */
 int rsh_render(int context, uint8_t *buf, size_t szbuf, 
-        float *c2w, float *K, size_t sze, size_t szi)
+        float *c2w, float *K, size_t sze, size_t szi, int L=-1)
 {
         Extrinsic e;
         Intrinsic i;
@@ -260,7 +260,7 @@ int rsh_render(int context, uint8_t *buf, size_t szbuf,
                 glClearColor(0.f, 0.f, 0.f, 0.f);
                 glClear(GL_COLOR_BUFFER_BIT);
                 s_renderer->SetCamera(Camera(e, i));
-                s_renderer->Render();
+                s_renderer->Render(L);
                 if ((err = glGetError()) != GL_NO_ERROR) {
                         fprintf(stderr, "Render depth fail\n");
                         fprintf(stderr, "GL Error code: %d\n", err);
