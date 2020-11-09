@@ -7,3 +7,4 @@ exp/
 *.mp4
 *.so
 *.o
+*.npy
