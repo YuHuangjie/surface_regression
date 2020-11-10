@@ -13,19 +13,21 @@ import cv2
 from rd_wrapper import rd_wrapper
 from load_approx_res import ApproxResSurfaceDataset as Dataset
 from model import *
+from rff.reject_sample import joint_reject_sample
 
-device = torch.device('cuda', 1)
+device = torch.device('cuda', 3)
 
 datatype = 'blender'    # 'blender' or 'dslf'
-expname = 'hotdog'     # dataset identifier
+expname = 'lucy_down'     # dataset identifier
 maxL = 3                # maximum order of SH basis
-dsize = [1024, 1024]   
+dsize = [512, 512]   
+test_only = True
 obj_path = f'data/{expname}/{expname}-sh.obj'
 data_dir = f'data/{expname}'
 exp_dir = f'exp/{expname}-L{maxL}'
 
 # Set up training/testing data
-partition = {'train': [f'./train/r_{i}' for i in range(800)], 
+partition = {'train': [f'./train/r_{i}' for i in range(100)], 
              'test': [f'./test/r_{i}' for i in range(200)]}
 train_params = {'shuffle': True,
           'num_workers': 1,}
@@ -40,10 +42,16 @@ test_set = Dataset(datatype, data_dir, obj_path, partition['test'],
                     'transforms_test.json', need_residual=True, L=maxL)
 test_generator = torch.utils.data.DataLoader(test_set, **test_params)
 
-def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
+def train_model(D, W, maptype, learning_rate, epochs, training_generator, test_only, *map_params):
 
-    model = make_network(D, W, B, B_view).to(device)
+    if maptype == 'ffm':
+        model = make_ffm_network(D, W, *map_params).to(device)
+    elif maptype == 'rff':
+        model = make_rff_network(D, W, *map_params).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+    if test_only:
+        return {'model': model}
 
     train_psnrs = []
     xs = []
@@ -64,6 +72,7 @@ def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
         if (i % 100 == 0 and i != 0) or i == epochs-1:
             train_psnrs.append(model_psnr(torch.Tensor([total_loss/len(training_generator)])))
             xs.append(i)
+            print(train_psnrs[-1])
 
     return {
         'train_psnrs': train_psnrs,
@@ -74,66 +83,87 @@ def train_model(D, W, learning_rate, epochs, B, B_view, training_generator):
 network_size = (8, 256)
 learning_rate = 1e-4
 epochs = 800
+
 posenc_scale = 6
+
 mapping_size = 256
 mapping_size_view = 256
-gauss_scale = [10.]
-gauss_scale_view = [0.2]
+gauss_scale = 10.
+gauss_scale_view = 0.2
+
+rff_size = 2000
 
 include_none = True
 include_basic = False
 include_pe = False
-include_gauss = False
+include_gauss = True
+include_rff = True
 
-B_dict = {}
-B_view_dict = {}
+map_params = {}
+map_type = {}
 if include_none:
     # Standard network - no mapping
-    B_dict['none'] = None
-    B_view_dict['none'] = None
+    map_params['none'] = (None, None)
+    map_type['none'] = 'ffm'
 if include_basic:
     # Basic mapping
-    B_dict['basic'] = torch.eye(RAW_INPUT_SIZE).to(device)
-    B_view_dict['basic'] = torch.eye(RAW_INPUT_VIEW_SIZE).to(device)
+    map_params['basic'] = (torch.eye(3).to(device), torch.eye(3).to(device))
+    map_type['basic'] = 'ffm'
 if include_pe:
     # Positional encoding
-    B_pe = 2**torch.linspace(0, posenc_scale, posenc_scale + 1)
-    B_pe = torch.cat([B_pe.reshape((B_pe.shape[0],1)), torch.zeros((B_pe.shape[0], RAW_INPUT_SIZE-1))], 1)
-    b = B_pe
-    for i in range(RAW_INPUT_SIZE-1):
-        B_pe = torch.cat([B_pe, torch.roll(b, i+1, dims=-1)], 0)
-    B_dict['pe'] = B_pe.to(device)
+    B = 2**torch.linspace(0, posenc_scale, posenc_scale + 1)
+    B = torch.cat([B.reshape((B.shape[0],1)), torch.zeros((B.shape[0], 3-1))], 1)
+    b = B
+    for i in range(3-1):
+        B = torch.cat([B, torch.roll(b, i+1, dims=-1)], 0)
     
-    B_pe = 2**torch.linspace(0, posenc_scale, posenc_scale + 1)
-    B_pe = torch.cat([B_pe.reshape((B_pe.shape[0],1)), torch.zeros((B_pe.shape[0], RAW_INPUT_VIEW_SIZE-1))], 1)
-    b = B_pe
-    for i in range(RAW_INPUT_VIEW_SIZE-1):
-        B_pe = torch.cat([B_pe, torch.roll(b, i+1, dims=-1)], 0)
-    B_view_dict['pe'] = B_pe.to(device)
+    B_view = 2**torch.linspace(0, posenc_scale, posenc_scale + 1)
+    B_view = torch.cat([B_view.reshape((B_view.shape[0],1)), torch.zeros((B_view.shape[0], 3-1))], 1)
+    b = B_view
+    for i in range(3-1):
+        B_view = torch.cat([B_view, torch.roll(b, i+1, dims=-1)], 0)
+    map_params['pe'] = (B.to(device), B_view.to(device))
+    map_type['pe'] = 'ffm'
 if include_gauss:
-    B_gauss = torch.normal(0, 1, size=(mapping_size, RAW_INPUT_SIZE)).to(device)
-    B_gauss_view = torch.normal(0, 1, size=(mapping_size_view, RAW_INPUT_VIEW_SIZE)).to(device)
-    for scale in gauss_scale_view:
-        B_dict[f'gauss_{scale}'] = B_gauss * gauss_scale[0]
-        B_view_dict[f'gauss_{scale}'] = B_gauss_view * scale
+    B_gauss = torch.normal(0, 1, size=(mapping_size, 3)).to(device)
+    B_gauss_view = torch.normal(0, 1, size=(mapping_size_view, 3)).to(device)
+    map_params[f'gauss_{gauss_scale_view}'] = (B_gauss * gauss_scale, B_gauss_view * gauss_scale_view)
+    map_type[f'gauss_{gauss_scale_view}'] = 'ffm'
+if include_rff:
+    (R_p, F_p) = np.load('rff/pkernel_spectrum.npy')
+    (R_d, F_d) = np.load('rff/dkernel_spectrum.npy')
+    W = joint_reject_sample(R_p=R_p, F_p=F_p, R_d=R_d, F_d=F_d, N=rff_size)
+    b = np.random.uniform(0, 2*np.pi, size=(1, rff_size))
+    map_params['rff'] = (W, b)
+    map_type['rff'] = 'rff'
+
+if test_only:
+    # override mapping parameters 
+    for k in map_params:
+        map_params[k] = torch.load(f'{exp_dir}/{k}/test/model.pt')['map_params']
 
 # This should take about 2-3 minutes
 outputs = {}
-for k in tqdm(B_dict):
-    outputs[k] = train_model(*network_size, learning_rate, epochs, B_dict[k], B_view_dict[k], 
-                             training_generator)
+for k in tqdm(map_params):
+    outputs[k] = train_model(*network_size, map_type[k], learning_rate, epochs, 
+                        training_generator, test_only, *map_params[k])
 
-    # save model
     model = outputs[k]['model']
     output_dir = f'{exp_dir}/{k}/test'
     os.makedirs(output_dir, exist_ok=True)
-    
-    save_dict = model.state_dict()
-    save_dict['D'] = model.D
-    save_dict['W'] = model.W
-    save_dict['B'] = model.B
-    save_dict['B_view'] = model.B_view
-    torch.save(save_dict, f'{output_dir}/model.pt')
+
+    if not test_only:
+        # save model
+        save_dict = model.state_dict()
+        save_dict['D'] = model.D
+        save_dict['W'] = model.W
+        save_dict['map_type'] = map_type[k]
+        save_dict['map_params'] = map_params[k]
+        torch.save(save_dict, f'{output_dir}/model.pt')
+    else:
+        # load model
+        save_dict = torch.load(f'{output_dir}/model.pt')
+        model.load_state_dict(save_dict, strict=False)
 
     # Make and save predicted images
     outputs[k]['test_psnrs'] = []
@@ -158,15 +188,16 @@ for k in tqdm(B_dict):
 
 plt.figure(figsize=(16,6))
 
-plt.subplot(121)
-for i, k in enumerate(outputs):
-    plt.plot(outputs[k]['xs'], outputs[k]['train_psnrs'], label=k)
-plt.title('Train error')
-plt.ylabel('PSNR')
-plt.xlabel('Training iter')
-plt.legend()
+if not test_only:
+    plt.subplot(121)
+    for i, k in enumerate(outputs):
+        plt.plot(outputs[k]['xs'], outputs[k]['train_psnrs'], label=k)
+    plt.title('Train error')
+    plt.ylabel('PSNR')
+    plt.xlabel('Training iter')
+    plt.legend()
 
-plt.subplot(122)
+    plt.subplot(122)
 for i, k in enumerate(outputs):
     plt.plot(outputs[k]['test_psnrs'], label=k)
 plt.title('Test error')

@@ -41,7 +41,7 @@ D    = 6 if kernel=='joint_kernel' else 3
 
 if kernel == 'pkernel':
     X = pkernel_X(N)
-    K    = pkernel(X, gamma=0.1)
+    K    = pkernel(X, gamma=0.008)
     (R_p, F_p) = np.load('pkernel_spectrum.npy')
 elif kernel == 'dkernel':
     X = dkernel_X(N)
@@ -49,7 +49,7 @@ elif kernel == 'dkernel':
     (R_d, F_d) = np.load('dkernel_spectrum.npy')
 elif kernel == 'joint_kernel':
     X = np.hstack([pkernel_X(N), dkernel_X(N)])
-    K = joint_kernel(X, pgamma=0.1, dgamma=10)
+    K = joint_kernel(X, pgamma=0.008, dgamma=10)
     (R_d, F_d) = np.load('dkernel_spectrum.npy')
     (R_p, F_p) = np.load('pkernel_spectrum.npy')
 
@@ -80,3 +80,4 @@ for R, ax in zip([10, 100, 1000, 10000], axes[1:]):
 
 plt.tight_layout()
 plt.show()
+plt.savefig('visualize_rff.png')
