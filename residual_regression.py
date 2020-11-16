@@ -13,21 +13,21 @@ import cv2
 from rd_wrapper import rd_wrapper
 from load_approx_res import ApproxResSurfaceDataset as Dataset
 from model import *
-from rff.reject_sample import joint_reject_sample
+from rff.reject_sample import *
 
 device = torch.device('cuda', 3)
 
 datatype = 'blender'    # 'blender' or 'dslf'
-expname = 'lucy_down'     # dataset identifier
+expname = 'greenstone_down'     # dataset identifier
 maxL = 3                # maximum order of SH basis
-dsize = [512, 512]   
-test_only = True
+test_only = False
+dsize = [512, 512]
 obj_path = f'data/{expname}/{expname}-sh.obj'
 data_dir = f'data/{expname}'
 exp_dir = f'exp/{expname}-L{maxL}'
 
 # Set up training/testing data
-partition = {'train': [f'./train/r_{i}' for i in range(100)], 
+partition = {'train': [f'./train/r_{i}' for i in range(800)], 
              'test': [f'./test/r_{i}' for i in range(200)]}
 train_params = {'shuffle': True,
           'num_workers': 1,}
@@ -82,18 +82,18 @@ def train_model(D, W, maptype, learning_rate, epochs, training_generator, test_o
 
 network_size = (8, 256)
 learning_rate = 1e-4
-epochs = 800
+epochs = 100
 
 posenc_scale = 6
 
-mapping_size = 256
-mapping_size_view = 256
-gauss_scale = 10.
-gauss_scale_view = 0.2
+mapping_size = 2048
+mapping_size_view = 2048
+gauss_scale = 8
+gauss_scale_view = 0.6
 
-rff_size = 2000
+rff_size = 8192
 
-include_none = True
+include_none = False
 include_basic = False
 include_pe = False
 include_gauss = True
@@ -127,11 +127,11 @@ if include_pe:
 if include_gauss:
     B_gauss = torch.normal(0, 1, size=(mapping_size, 3)).to(device)
     B_gauss_view = torch.normal(0, 1, size=(mapping_size_view, 3)).to(device)
-    map_params[f'gauss_{gauss_scale_view}'] = (B_gauss * gauss_scale, B_gauss_view * gauss_scale_view)
-    map_type[f'gauss_{gauss_scale_view}'] = 'ffm'
+    map_params['ffm'] = (B_gauss * gauss_scale, B_gauss_view * gauss_scale_view)
+    map_type['ffm'] = 'ffm'
 if include_rff:
-    (R_p, F_p) = np.load('rff/pkernel_spectrum.npy')
-    (R_d, F_d) = np.load('rff/dkernel_spectrum.npy')
+    (R_p, F_p) = np.load('rff/pkernel_spectrum_0.001.npy')
+    (R_d, F_d) = np.load('rff/dkernel_spectrum_6.npy')
     W = joint_reject_sample(R_p=R_p, F_p=F_p, R_d=R_d, F_d=F_d, N=rff_size)
     b = np.random.uniform(0, 2*np.pi, size=(1, rff_size))
     map_params['rff'] = (W, b)
@@ -151,6 +151,7 @@ for k in tqdm(map_params):
     model = outputs[k]['model']
     output_dir = f'{exp_dir}/{k}/test'
     os.makedirs(output_dir, exist_ok=True)
+    print(f'writing output to {output_dir}')
 
     if not test_only:
         # save model
