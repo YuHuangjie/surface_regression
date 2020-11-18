@@ -16,13 +16,16 @@ class FFM:
             def proj(x, B):
                 x_proj = torch.matmul(2 * np.pi * x, B.T)
                 return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
-            self.map_f = lambda x: torch.cat([proj(x[:,:,:3], B), proj(x[:,:,3:], B_view)], dim=-1)
+            self.map_f = lambda x: torch.cat([proj(x[:,:,:3], self.B), proj(x[:,:,3:], self.B_view)], dim=-1)
 
     def map_size(self):
         return (2*self.B.shape[0] if self.B is not None else 3) + \
                (2*self.B_view.shape[0] if self.B_view is not None else 3)
 
     def map(self, X):
+        if self.B.device != X.device:
+            self.B = self.B.to(X.device)
+            self.B_view = self.B_view.to(X.device)
         return self.map_f(X)
 
 class RFF:
