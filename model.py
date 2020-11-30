@@ -3,24 +3,26 @@ torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from rff.reject_sample import joint_reject_sample
+
+class NoMap:
+    def __init__(self):
+        pass
+    def map_size(self):
+        return 6
+    def map(self, X):
+        return X
 
 class FFM:
     def __init__(self, B, B_view):
-        self.B = B
-        self.B_view = B_view
-
-        if B is None:
-            self.map_f = lambda x: x
-        else:
-            def proj(x, B):
-                x_proj = torch.matmul(2 * np.pi * x, B.T)
-                return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
-            self.map_f = lambda x: torch.cat([proj(x[:,:,:3], self.B), proj(x[:,:,3:], self.B_view)], dim=-1)
+        def proj(x, B):
+            x_proj = torch.matmul(2 * np.pi * x, B.T)
+            return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        self.B = torch.Tensor(B)
+        self.B_view = torch.Tensor(B_view)
+        self.map_f = lambda x: torch.cat([proj(x[:,:,:3], self.B), proj(x[:,:,3:], self.B_view)], dim=-1)
 
     def map_size(self):
-        return (2*self.B.shape[0] if self.B is not None else 3) + \
-               (2*self.B_view.shape[0] if self.B_view is not None else 3)
+        return 2*self.B.shape[0] + 2*self.B_view.shape[0] 
 
     def map(self, X):
         if self.B.device != X.device:
@@ -39,8 +41,6 @@ class RFF:
     def __init__(self, W, b):
         self.W = torch.Tensor(W)
         self.b = torch.Tensor(b)
-        # self.multiplier = np.sqrt(2) / np.sqrt(N)
-        self.multiplier = np.sqrt(2)
         self.N = self.W.shape[0]
 
     def map_size(self):
@@ -50,7 +50,7 @@ class RFF:
         if self.W.device != X.device:
             self.W = self.W.to(X.device)
             self.b = self.b.to(X.device)
-        Z = self.multiplier * torch.cos(X @ self.W.T + self.b)
+        Z = torch.cos(X @ self.W.T + self.b)
         return Z
 
 class MLP(nn.Module):
@@ -81,7 +81,6 @@ def make_rff_network(D, W, We, b):
     map = RFF(We, b)
     return MLP(D, W, map).float()
 
-model_pred = lambda model, x: model(x)
-model_loss = lambda pred, y: .5 * torch.mean((pred - y) ** 2)
-model_loss2 = lambda model, x, y: .5 * torch.mean((model_pred(model, x) - y) ** 2)
-model_psnr = lambda loss : -10. * torch.log10(2.*loss)
+def make_relu_network(D, W):
+    map = NoMap()
+    return MLP(D, W, map).float()

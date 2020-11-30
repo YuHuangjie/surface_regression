@@ -8,3 +8,4 @@ exp/
 *.so
 *.o
 *.npy
+logs/
