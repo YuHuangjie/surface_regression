@@ -13,21 +13,19 @@ class NoMap:
         return X
 
 class FFM:
-    def __init__(self, B, B_view):
+    def __init__(self, B):
         def proj(x, B):
-            x_proj = torch.matmul(2 * np.pi * x, B.T)
+            x_proj = torch.matmul(x, B.T)
             return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
         self.B = torch.Tensor(B)
-        self.B_view = torch.Tensor(B_view)
-        self.map_f = lambda x: torch.cat([proj(x[:,:,:3], self.B), proj(x[:,:,3:], self.B_view)], dim=-1)
+        self.map_f = lambda x: proj(x, self.B)
 
     def map_size(self):
-        return 2*self.B.shape[0] + 2*self.B_view.shape[0] 
+        return 2*self.B.shape[0]
 
     def map(self, X):
         if self.B.device != X.device:
             self.B = self.B.to(X.device)
-            self.B_view = self.B_view.to(X.device)
         return self.map_f(X)
 
 class RFF:
@@ -73,8 +71,8 @@ class MLP(nn.Module):
         outputs = self.output_linear(h)
         return outputs
     
-def make_ffm_network(D, W, B=None, B_view=None):
-    map = FFM(B, B_view)
+def make_ffm_network(D, W, B=None):
+    map = FFM(B)
     return MLP(D, W, map).float()
 
 def make_rff_network(D, W, We, b):

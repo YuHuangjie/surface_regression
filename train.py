@@ -30,6 +30,7 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
     with tqdm(total=len(train_dataloader) * epochs) as pbar:
         pbar.update(total_steps)
         train_losses = []
+        total_loss = 0
         for epoch in range(total_steps//len(train_dataloader), epochs):
             if not epoch % epochs_til_checkpoint and epoch:
                 torch.save({'model': model.state_dict(),
@@ -55,7 +56,6 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
                         tqdm.write(f"val_loss {torch.mean(torch.Tensor(val_losses))}")
                     model.train()
 
-            total_loss = 0
             for step, (model_input, gt, *_) in enumerate(train_dataloader):
                 start_time = time.time()
 
@@ -64,6 +64,7 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
 
                 train_loss = model_loss2(model, model_input, gt)
                 writer.add_scalar('train_loss', train_loss.item(), total_steps)
+                writer.add_scalar('train_psnr', model_psnr(train_loss).item(), total_steps)
                 train_losses.append(train_loss.item())
 
                 optim.zero_grad()
@@ -76,7 +77,7 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
                 total_loss += train_loss.item()
                 if not total_steps % steps_til_summary:
                     total_loss /= steps_til_summary
-                    tqdm.write(f"Epoch {epoch}, Total loss {total_loss:.6}, iteration time {time.time()-start_time:.6}")
+                    tqdm.write(f"Epoch {epoch}, Total loss {total_loss:.6}, PSNR {model_psnr(torch.Tensor([total_loss])).item()}, iteration time {time.time()-start_time:.6}")
                     total_loss = 0
 
                 total_steps += 1

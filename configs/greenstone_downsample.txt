@@ -1,6 +1,6 @@
-logdir=logs/lucy
+logdir=logs/greenstone_down
 datatype=blender
-exp=lucy
+exp=greenstone_down
 
 sh_level=3
 

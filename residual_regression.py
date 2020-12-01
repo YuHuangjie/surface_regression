@@ -46,10 +46,8 @@ p.add_argument('--model', type=str, action='append', required=True,
                help='Options available are "relu", "ffm", "gffm"')
 p.add_argument('--ffm_map_size', type=int, default=1024,
                help='mapping dimension of ffm')
-p.add_argument('--ffm_pos_scale', type=float, default=50,
+p.add_argument('--ffm_map_scale', type=float, default=10,
                help='Gaussian mapping scale of positional input')
-p.add_argument('--ffm_view_scale', type=float, default=1.25,
-               help='Gaussian mapping scale of viewing input')
 p.add_argument('--gffm_map_size', type=int, default=4096,
                help='mapping dimension of gffm')
 
@@ -103,12 +101,11 @@ for mt in args.model:
         model = make_relu_network(*network_size)
     elif mt == 'ffm':
         if model_params is None:
-            B = torch.normal(0, 1, size=(args.ffm_map_size, 3)) * args.ffm_pos_scale
-            B_view = torch.normal(0, 1, size=(args.ffm_map_size, 3)) * args.ffm_view_scale
+            B = torch.normal(0, 1, size=(args.ffm_map_size, 6)) * args.ffm_map_scale
         else:
-            (B, B_view) = model_params
-        model = make_ffm_network(*network_size, B, B_view)
-        model_params = (B, B_view)
+            B = model_params
+        model = make_ffm_network(*network_size, B)
+        model_params = B
     elif mt == 'gffm':
         if model_params is None:
             (R_p, F_p) = np.load('rff/pkernel_spectrum_0.001.npy')
