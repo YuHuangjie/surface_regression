@@ -15,6 +15,6 @@ train_images=800
 test_images=200
 
 model=gffm
-ffm_map_size=2048
+ffm_map_size=4096
 ffm_map_scale=10
 gffm_map_size=8192
