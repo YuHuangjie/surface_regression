@@ -2,6 +2,7 @@ data/
 __pycache__/
 training_data/
 exp/
+.vscode/
 *.jpg
 *.png
 *.mp4

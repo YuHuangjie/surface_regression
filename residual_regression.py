@@ -14,8 +14,8 @@ import configargparse
 from rd_wrapper import rd_wrapper
 from load_approx_res import ApproxResSurfaceDataset as Dataset
 from model import *
-from rff.reject_sample import *
 from train import *
+from sample.sample import slf_sample, slf_sample_init
 
 p = configargparse.ArgumentParser()
 
@@ -50,7 +50,10 @@ p.add_argument('--ffm_map_scale', type=float, default=10,
                help='Gaussian mapping scale of positional input')
 p.add_argument('--gffm_map_size', type=int, default=4096,
                help='mapping dimension of gffm')
-
+p.add_argument('--gffm_pos', type=float, default=1000,
+               help='mapping dimension of gffm')
+p.add_argument('--gffm_dir', type=int, default=6,
+               help='mapping dimension of gffm')
 args = p.parse_args()
 
 datatype = args.datatype
@@ -108,10 +111,11 @@ for mt in args.model:
         model_params = B
     elif mt == 'gffm':
         if model_params is None:
-            (R_p, F_p) = np.load('rff/pkernel_spectrum_0.001.npy')
-            (R_d, F_d) = np.load('rff/dkernel_spectrum_6.npy')
-            W = joint_reject_sample(R_p=R_p, F_p=F_p, R_d=R_d, F_d=F_d, N=args.gffm_map_size)
+            tqdm.write(f'sampling SLF kernel with params ({args.gffm_pos}, {args.gffm_dir}), might take a while')
+            integrand_lib = slf_sample_init('sample/integrands.so')
+            W = slf_sample(integrand_lib, args.gffm_pos, args.gffm_dir, N=args.gffm_map_size)
             b = np.random.uniform(0, 2*np.pi, size=(1, args.gffm_map_size))
+            tqdm.write(f'finish sampling')
         else:
             (W, b) = model_params
         model = make_rff_network(*network_size, W, b)
