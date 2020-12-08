@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Iglad/include -Iinclude -fpic
+CFLAGS = -Iglad/include -Iinclude -fpic -std=c++11
 LDFLAGS = -lEGL -ldl -shared
 TARGET = rd.so
 
