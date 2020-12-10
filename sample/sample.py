@@ -13,7 +13,7 @@ def slf_sample_init(lib_path):
 
     return lib
 
-def slf_sample(lib, a_pos, a_dir, N, max_radius_pos=200, max_radius_dir=20):
+def slf_sample(lib, a_pos, a_dir, N):
     '''
     Return random frequencies as in Random Fourier Features.
 
@@ -23,9 +23,29 @@ def slf_sample(lib, a_pos, a_dir, N, max_radius_pos=200, max_radius_dir=20):
     We first take the Fourier transform of K and regard it as a (unnormalized)
     probability distribution. We then sample from it.
     '''
+    # First determine the range of radius. Too large radius leads to very small
+    # frequency, and therefore difficult to apply rejection sampling.
+    radius = np.linspace(0, 20, 20) * 10
+    for i, r in enumerate(radius):
+        c = np.array([r, a_pos])
+        user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
+        func = LowLevelCallable(lib.integrand_pos, user_data)
+        if integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0] < 1e-5:
+            break
+    R_p = np.linspace(0, radius[i], int(radius[i]) if int(radius[i]) > 100 else 100)
+
+    for i, r in enumerate(radius):
+        c = np.array([r, a_dir])
+        user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
+        func = LowLevelCallable(lib.integrand_dir, user_data)
+        if integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0] < 1e-5:
+            break
+    R_d = np.linspace(0, radius[i], int(radius[i]) if int(radius[i]) > 100 else 100)
+
+    print((R_p[-1], R_d[-1]))
+
     # Take the fourier transform of positional kernel. Store the transform as a
     # function of the norm of frequency.
-    R_p = np.linspace(0, max_radius_pos, 150)
     F_p = np.zeros_like(R_p)
     for i, r in enumerate(R_p):
         c = np.array([r, a_pos])
@@ -35,7 +55,6 @@ def slf_sample(lib, a_pos, a_dir, N, max_radius_pos=200, max_radius_dir=20):
 
     # Take the fourier transform of directional kernel. Store the transform as a
     # function of the norm of frequency.
-    R_d = np.linspace(0, max_radius_dir, 100)
     F_d = np.zeros_like(R_d)
     for i, r in enumerate(R_d):
         c = np.array([r, a_dir])
