@@ -1,4 +1,5 @@
 import os
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -25,6 +26,13 @@ for d in dir_size:
 '''
 Make figure
 '''
+params = {'legend.fontsize': 12,
+         'axes.labelsize': 12,
+         'axes.titlesize': 14,
+         'xtick.labelsize':10,
+         'ytick.labelsize':10}
+matplotlib.rcParams.update(params)
+
 plt.figure(figsize=(10,4))
 plt.subplot(1,2,1)
 ax = plt.gca()
@@ -40,7 +48,7 @@ for i, length in enumerate(map_size):
                 best_ffm_psnr = mean[i]
 ax.plot(np.array(map_size), mean)
 ax.set_xlim((map_size[0], map_size[-1]))
-ax.set_xlabel('FFM mapping scale')
+ax.set_xlabel('(a) FFM mapping scale')
 ax.grid(True, which='major', alpha=.3)
 ax.set_xscale('log', basex=2)
 ax.set_ylabel('Mean PSNR')
@@ -59,13 +67,13 @@ for d in dir_size:
         ax.plot(np.array(pos_size), mean, label=r'$\theta_{\omega}='+f'{d}'+r'$')
 
 ax.axhline(best_ffm_psnr, color='black', linestyle='--', label='best FFM')
-ax.set_xlabel(r'positional scale $\theta_{\mu}$')
+ax.set_xlabel(r'(b) positional scale $\theta_{\mu}$')
 ax.set_xlim((pos_size[0], pos_size[-1]))
 ax.grid(True, which='major', alpha=.3)
 ax.set_xscale('log', basex=2)
 ax.set_ylabel('Mean PSNR')
 
-plt.legend(loc='lower right')
+plt.legend(loc='center left', bbox_to_anchor=(1,.5), handlelength=1)
 plt.tight_layout()
 plt.savefig('fig_gffm_sweep.png')
 plt.show()
