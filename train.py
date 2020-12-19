@@ -21,70 +21,56 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
     checkpoints_dir = os.path.join(logdir, 'checkpoints')
     os.makedirs(checkpoints_dir, exist_ok=True)
     
-    summaries_dir = os.path.join(logdir, 'summaries')
+    summaries_dir = os.path.join(logdir,  'summaries')
     os.makedirs(summaries_dir, exist_ok=True)
 
     writer = SummaryWriter(summaries_dir, purge_step=global_step)
 
     total_steps = global_step
-    with tqdm(total=len(train_dataloader) * epochs) as pbar:
-        pbar.update(total_steps)
-        train_losses = []
-        total_loss = 0
-        for epoch in range(total_steps//len(train_dataloader), epochs):
-            if not epoch % epochs_til_checkpoint and epoch:
-                torch.save({'model': model.state_dict(),
-                            'params': model_params,
-                            'global_step': total_steps},
-                           os.path.join(checkpoints_dir, f'model_epoch_{epoch:04}.pt'))
-                np.savetxt(os.path.join(checkpoints_dir, f'train_losses_epoch_{epoch:04}.txt'),
-                           np.array(train_losses))
+    pbar = tqdm(range(epochs), dynamic_ncols=True, smoothing=0.01)
+    for epoch in pbar:
 
-                if val_dataloader is not None:
-                    tqdm.write("Running partial validation set...")
-                    model.eval()
-                    with torch.no_grad():
-                        val_losses = []
-                        for (model_input, gt, *_) in val_dataloader:
-                            model_input, gt = model_input.cuda(), gt.cuda()
-                            val_loss = model_loss2(model, model_input, gt)
-                            val_losses.append(val_loss)
-                            if len(val_losses) > 10:
-                                break
+        model.train()
+        for step, (model_input, gt, *_) in enumerate(train_dataloader):
 
-                        writer.add_scalar("val_loss", torch.mean(torch.Tensor(val_losses)), total_steps)
-                        tqdm.write(f"val_loss {torch.mean(torch.Tensor(val_losses))}")
-                    model.train()
+            model_input = model_input.cuda()
+            gt = gt.cuda()
 
-            for step, (model_input, gt, *_) in enumerate(train_dataloader):
-                start_time = time.time()
+            train_loss = model_loss2(model, model_input, gt)
+            writer.add_scalar('train_loss', train_loss.item(), total_steps)
+            writer.add_scalar('train_psnr', model_psnr(train_loss).item(), total_steps)
 
-                model_input = model_input.cuda()
-                gt = gt.cuda()
+            optim.zero_grad()
+            train_loss.backward()
+            optim.step()
 
-                train_loss = model_loss2(model, model_input, gt)
-                writer.add_scalar('train_loss', train_loss.item(), total_steps)
-                writer.add_scalar('train_psnr', model_psnr(train_loss).item(), total_steps)
-                train_losses.append(train_loss.item())
+            # evaludate
+            pbar.set_description((f"Epoch {epoch}, Total loss {train_loss.item():.6}, PSNR {model_psnr(torch.Tensor([train_loss.item()])).item():.2f}"))
 
-                optim.zero_grad()
-                train_loss.backward()
-                optim.step()
+            total_steps += 1
 
-                pbar.update(1)
+        if not epoch % epochs_til_checkpoint and epoch:
+            torch.save({'model': model.state_dict(),
+                        'params': model_params,
+                        'global_step': total_steps},
+                       os.path.join(checkpoints_dir, f'model_epoch_{epoch:04}.pt'))
 
-                # evaludate
-                total_loss += train_loss.item()
-                if not total_steps % steps_til_summary:
-                    total_loss /= steps_til_summary
-                    tqdm.write(f"Epoch {epoch}, Total loss {total_loss:.6}, PSNR {model_psnr(torch.Tensor([total_loss])).item()}, iteration time {time.time()-start_time:.6}")
-                    total_loss = 0
+            if val_dataloader is not None:
+                pbar.set_description(("Running partial validation set..."))
+                model.eval()
+                with torch.no_grad():
+                    val_losses = []
+                    for (model_input, gt, *_) in val_dataloader:
+                        model_input, gt = model_input.cuda(), gt.cuda()
+                        val_loss = model_loss2(model, model_input, gt)
+                        val_losses.append(val_loss)
+                        if len(val_losses) > 10:
+                            break
 
-                total_steps += 1
+                    writer.add_scalar("val_loss", torch.mean(torch.Tensor(val_losses)), total_steps)
+                    pbar.set_description((f"val_loss {torch.mean(torch.Tensor(val_losses)):.4f}"))
 
-        torch.save({'model': model.state_dict(),
-                    'params': model_params,
-                    'global_step': total_steps},
-                   os.path.join(checkpoints_dir, 'model_final.pt'))
-        np.savetxt(os.path.join(checkpoints_dir, 'train_losses_final.txt'),
-                   np.array(train_losses))
+    torch.save({'model': model.state_dict(),
+                'params': model_params,
+                'global_step': total_steps},
+               os.path.join(checkpoints_dir, 'model_final.pt'))

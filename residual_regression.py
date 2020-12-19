@@ -18,13 +18,13 @@ from train import *
 from sample.sample import slf_sample, slf_sample_init
 
 p = configargparse.ArgumentParser()
-
+p.add_argument('--expname', type=str,  default='test')
 p.add_argument('--config', is_config_file=True, help='config file path')
 p.add_argument('--logdir', type=str, required=False, default='./logs/default', help='root for logging')
 p.add_argument('--test_only', action='store_true', help='test only')
 p.add_argument('--restart', action='store_true', help='do not reload from checkpoints')
 p.add_argument('--datatype', type=str, default='blender',help='data loader type (blender or dslf)')
-p.add_argument('--exp', type=str, required=True, help='identifier of training data (e.g. lucy)')
+p.add_argument('--exp', type=str, default='materials', help='identifier of training data (e.g. lucy)')
 p.add_argument('--sh_level', type=int, default=3, help='order of SH basis (0-3)')   
 
 # General training options
@@ -32,8 +32,9 @@ p.add_argument('--lr', type=float, default=1e-4, help='learning rate. default=1e
 p.add_argument('--num_epochs', type=int, default=100, help='Number of epochs to train for.')
 p.add_argument('--net_depth', type=int, default=8)
 p.add_argument('--net_width', type=int, default=256)
+p.add_argument('--degree', type=float, default=1.0, help='the degree of the network graph')
 
-p.add_argument('--epochs_til_ckpt', type=int, default=100,
+p.add_argument('--epochs_til_ckpt', type=int, default=30,
                help='Epoch interval until checkpoint is saved.')
 p.add_argument('--steps_til_summary', type=int, default=100,
                help='Step interval until loss is printed.')
@@ -57,7 +58,7 @@ p.add_argument('--gffm_dir', type=int, default=6,
 args = p.parse_args()
 
 datatype = args.datatype
-data_dir = f'data/{args.exp}'
+data_dir = f'/mnt/data/new_disk/YuHuangjie/surface_regression/data/{args.exp}'
 
 # Set up training/testing data
 if datatype == 'blender':
@@ -83,7 +84,8 @@ for mt in args.model:
     tqdm.write(f'Running at {args.exp} / {mt}')
 
     # Load checkpoints
-    logdir = os.path.join(args.logdir, f'{mt}-L{args.sh_level}')
+    # logdir = os.path.join(args.logdir, f'{args.expname}-gffm_pos-{args.gffm_pos:.2f}-gffm_dir-{args.gffm_dir:.2f}-map_size-{args.gffm_map_size:d}')
+    logdir = os.path.join(args.logdir,f'{args.expname}-map_size-{args.ffm_map_size:d}')
     global_step = 0
     model_params = None
     state_dict = None
@@ -118,7 +120,11 @@ for mt in args.model:
             tqdm.write(f'finish sampling')
         else:
             (W, b) = model_params
-        model = make_rff_network(*network_size, W, b)
+
+        if args.degree<1.0:
+            model = make_prff_network(*network_size, W, b, args.degree)
+        else:
+            model = make_rff_network(*network_size, W, b)
         model_params = (W, b)
     else:
         raise NotImplementedError
@@ -155,4 +161,3 @@ for mt in args.model:
 
     # save test psnrs
     np.savetxt(f'{output_dir}/test_psnr.txt', psnr, newline=',\n')
-    np.save(f'{output_dir}/test_psnr.npy', psnr)
