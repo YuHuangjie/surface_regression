@@ -34,6 +34,7 @@ p.add_argument('--net_depth', type=int, default=8)
 p.add_argument('--net_width', type=int, default=256)
 p.add_argument('--degree', type=float, default=1.0, help='the degree of the network graph')
 
+p.add_argument('--epochs_til_test',type=int,default=10)
 p.add_argument('--epochs_til_ckpt', type=int, default=30,
                help='Epoch interval until checkpoint is saved.')
 p.add_argument('--steps_til_summary', type=int, default=100,
@@ -55,10 +56,11 @@ p.add_argument('--gffm_pos', type=float, default=1000,
                help='mapping dimension of gffm')
 p.add_argument('--gffm_dir', type=int, default=6,
                help='mapping dimension of gffm')
+p.add_argument('--use_batch', action='store_true')
 args = p.parse_args()
 
 datatype = args.datatype
-data_dir = f'/mnt/data/new_disk/YuHuangjie/surface_regression/data/{args.exp}'
+data_dir = f'/mnt/new_disk/YuHuangjie/surface_regression/data/{args.exp}'
 
 # Set up training/testing data
 if datatype == 'blender':
@@ -70,7 +72,7 @@ if datatype == 'blender':
 
     if not args.test_only:
         train_set = Dataset(datatype, data_dir, obj_path, train_part, 
-                    'transforms_train.json', L=args.sh_level)
+                    'transforms_train.json', L=args.sh_level, use_batch=args.use_batch)
         train_dataloader = torch.utils.data.DataLoader(train_set, **train_params)
 
     test_set = Dataset(datatype, data_dir, obj_path, test_part, 
@@ -133,31 +135,44 @@ for mt in args.model:
         model.load_state_dict(state_dict)
     model.cuda()
 
+    # define trainer
+    optim = torch.optim.Adam(lr=args.lr, params=model.parameters())
+
+    os.makedirs(logdir, exist_ok=True)
+
+    checkpoints_dir = os.path.join(logdir, 'checkpoints')
+    os.makedirs(checkpoints_dir, exist_ok=True)
+
+    summaries_dir = os.path.join(logdir, 'summaries')
+    os.makedirs(summaries_dir, exist_ok=True)
+
+    writer = SummaryWriter(summaries_dir, purge_step=global_step)
+
+    epochs_til_checkpoint = args.epochs_til_ckpt
+    steps_til_summary = args.steps_til_summary
+    epochs_til_test = args.epochs_til_test
+    val_dataloader = None
+
     # training
     if not args.test_only:
-        train(model, train_dataloader, args.lr, epochs=args.num_epochs, logdir=logdir,
-            epochs_til_checkpoint=args.epochs_til_ckpt, steps_til_summary=args.steps_til_summary,
-            val_dataloader=None, global_step=global_step, model_params=model_params)
+        total_steps = global_step
+        pbar = tqdm(range(args.num_epochs), dynamic_ncols=True, smoothing=0.01)
+        for epoch in pbar:
+            total_steps = run_epoch(model, train_dataloader, writer, optim, pbar, epoch, total_steps)
 
-    # make full testing
-    tqdm.write("Running full validation set...")
-    output_dir = os.path.join(logdir, 'result')
-    os.makedirs(output_dir, exist_ok=True)
-    psnr = []
-    dsize = (test_set.H, test_set.W)
+            if val_dataloader is not None:
+                run_val(model, val_dataloader, pbar, writer, epoch)
 
-    with torch.no_grad():
-        for i, (x, residual, mask, approx) in enumerate(test_dataloader):
-            x, residual = x.cuda(), residual.cuda()
-            y = model_pred(model, x)
-            img = torch.zeros((dsize[0]*dsize[1], 3))
-            img[mask[0]] = y.cpu() + approx[0].cpu()
-            img = np.clip(img.numpy() * 255., 0, 255).astype(np.uint8)
-            img = img.reshape(dsize + (3,))
+            if epoch % epochs_til_test ==0:
+                run_test(model, test_dataloader, writer, logdir, test_set, epoch)
 
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            assert(cv2.imwrite(f'{output_dir}/{i}.png', img))
-            psnr.append(model_psnr(model_loss(y, residual)).item())
+            if not epoch % epochs_til_checkpoint and epoch:
+                torch.save({'model': model.state_dict(),
+                            'params': model_params,
+                            'global_step': total_steps},
+                           os.path.join(checkpoints_dir, f'model_epoch_{epoch:04}.pt'))
 
-    # save test psnrs
-    np.savetxt(f'{output_dir}/test_psnr.txt', psnr, newline=',\n')
+        torch.save({'model': model.state_dict(),
+                    'params': model_params,
+                    'global_step': total_steps},
+                   os.path.join(checkpoints_dir, 'model_final.pt'))

@@ -1,4 +1,4 @@
-import os
+import os, cv2
 import shutil
 import time
 
@@ -12,65 +12,70 @@ model_loss = lambda pred, y: torch.mean((pred - y) ** 2)
 model_loss2 = lambda model, x, y: torch.mean((model_pred(model, x) - y) ** 2)
 model_psnr = lambda loss : -10. * torch.log10(loss)
 
-def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10, 
-    steps_til_summary=100, val_dataloader=None, global_step=0, model_params=None):
-    optim = torch.optim.Adam(lr=lr, params=model.parameters())
+def run_epoch(model, train_dataloader, writer, optim, pbar, epoch, total_steps):
 
-    os.makedirs(logdir, exist_ok=True)
+    model.train()
+    for step, (model_input, gt, *_) in enumerate(train_dataloader):
 
-    checkpoints_dir = os.path.join(logdir, 'checkpoints')
-    os.makedirs(checkpoints_dir, exist_ok=True)
-    
-    summaries_dir = os.path.join(logdir,  'summaries')
-    os.makedirs(summaries_dir, exist_ok=True)
+        model_input = model_input.cuda()
+        gt = gt.cuda()
 
-    writer = SummaryWriter(summaries_dir, purge_step=global_step)
+        train_loss = model_loss2(model, model_input, gt)
+        writer.add_scalar('train_loss', train_loss.item(), total_steps)
+        writer.add_scalar('train_psnr', model_psnr(train_loss).item(), total_steps)
 
-    total_steps = global_step
-    pbar = tqdm(range(epochs), dynamic_ncols=True, smoothing=0.01)
-    for epoch in pbar:
+        optim.zero_grad()
+        train_loss.backward()
+        optim.step()
 
-        model.train()
-        for step, (model_input, gt, *_) in enumerate(train_dataloader):
+        # evaludate
+        pbar.set_description((f"Epoch {epoch}, Total loss {train_loss.item():.6}, PSNR {model_psnr(torch.Tensor([train_loss.item()])).item():.2f}"))
 
-            model_input = model_input.cuda()
-            gt = gt.cuda()
+        total_steps += 1
 
-            train_loss = model_loss2(model, model_input, gt)
-            writer.add_scalar('train_loss', train_loss.item(), total_steps)
-            writer.add_scalar('train_psnr', model_psnr(train_loss).item(), total_steps)
+    return total_steps
 
-            optim.zero_grad()
-            train_loss.backward()
-            optim.step()
+def run_val(model, val_dataloader, pbar, writer, epoch):
 
-            # evaludate
-            pbar.set_description((f"Epoch {epoch}, Total loss {train_loss.item():.6}, PSNR {model_psnr(torch.Tensor([train_loss.item()])).item():.2f}"))
+        pbar.set_description(("Running partial validation set..."))
+        model.eval()
+        with torch.no_grad():
+            val_losses = []
+            for (model_input, gt, *_) in val_dataloader:
+                model_input, gt = model_input.cuda(), gt.cuda()
+                val_loss = model_loss2(model, model_input, gt)
+                val_losses.append(val_loss)
+                if len(val_losses) > 10:
+                    break
 
-            total_steps += 1
+            writer.add_scalar("val_loss", torch.mean(torch.Tensor(val_losses)), epoch)
+            pbar.set_description((f"val_loss {torch.mean(torch.Tensor(val_losses)):.4f}"))
 
-        if not epoch % epochs_til_checkpoint and epoch:
-            torch.save({'model': model.state_dict(),
-                        'params': model_params,
-                        'global_step': total_steps},
-                       os.path.join(checkpoints_dir, f'model_epoch_{epoch:04}.pt'))
+def run_test(model, test_dataloader, writer, logdir, test_set, epoch):
 
-            if val_dataloader is not None:
-                pbar.set_description(("Running partial validation set..."))
-                model.eval()
-                with torch.no_grad():
-                    val_losses = []
-                    for (model_input, gt, *_) in val_dataloader:
-                        model_input, gt = model_input.cuda(), gt.cuda()
-                        val_loss = model_loss2(model, model_input, gt)
-                        val_losses.append(val_loss)
-                        if len(val_losses) > 10:
-                            break
+    # make full testing
+    tqdm.write("Running full validation set...")
+    output_dir = os.path.join(logdir, 'result')
+    os.makedirs(output_dir, exist_ok=True)
+    psnr = []
+    dsize = (test_set.H, test_set.W)
 
-                    writer.add_scalar("val_loss", torch.mean(torch.Tensor(val_losses)), total_steps)
-                    pbar.set_description((f"val_loss {torch.mean(torch.Tensor(val_losses)):.4f}"))
+    with torch.no_grad():
+        for i, (x, residual, mask, approx) in enumerate(test_dataloader):
+            x, residual = x.cuda(), residual.cuda()
+            y = model_pred(model, x)
+            img = torch.zeros((dsize[0] * dsize[1], 3))
+            img[mask[0]] = y.cpu() + approx[0].cpu()
+            img = np.clip(img.numpy() * 255., 0, 255).astype(np.uint8)
+            img = img.reshape(dsize + (3,))
 
-    torch.save({'model': model.state_dict(),
-                'params': model_params,
-                'global_step': total_steps},
-               os.path.join(checkpoints_dir, 'model_final.pt'))
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            assert (cv2.imwrite(f'{output_dir}/{i}.png', img))
+            psnr.append(model_psnr(model_loss(y, residual)).item())
+
+    writer.add_scalar('test_psnr', np.mean(psnr), epoch)
+    writer.add_image('test_img', img, epoch, dataformats='HWC')
+
+    # save test psnrs
+    np.savetxt(f'{output_dir}/test_{epoch}_psnr.txt', psnr, newline=',\n')
+
