@@ -163,8 +163,9 @@ for mt in args.model:
             if val_dataloader is not None:
                 run_val(model, val_dataloader, pbar, writer, epoch)
 
-            if epoch % epochs_til_test ==0:
-                run_test(model, test_dataloader, writer, logdir, test_set, epoch)
+            if epoch % epochs_til_test == epochs_til_test-1:
+                writePNG = epoch >= args.num_epochs - epochs_til_test
+                run_test(model, test_dataloader, writer, logdir, test_set, epoch, writePNG=writePNG)
 
             if not epoch % epochs_til_checkpoint and epoch:
                 torch.save({'model': model.state_dict(),

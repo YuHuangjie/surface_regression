@@ -51,7 +51,7 @@ def run_val(model, val_dataloader, pbar, writer, epoch):
             writer.add_scalar("val_loss", torch.mean(torch.Tensor(val_losses)), epoch)
             pbar.set_description((f"val_loss {torch.mean(torch.Tensor(val_losses)):.4f}"))
 
-def run_test(model, test_dataloader, writer, logdir, test_set, epoch):
+def run_test(model, test_dataloader, writer, logdir, test_set, epoch, writePNG=False):
 
     # make full testing
     tqdm.write("Running full validation set...")
@@ -69,8 +69,9 @@ def run_test(model, test_dataloader, writer, logdir, test_set, epoch):
             img = np.clip(img.numpy() * 255., 0, 255).astype(np.uint8)
             img = img.reshape(dsize + (3,))
 
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            assert (cv2.imwrite(f'{output_dir}/{i}.png', img))
+            if writePNG:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                assert (cv2.imwrite(f'{output_dir}/{i}.png', img))
             psnr.append(model_psnr(model_loss(y, residual)).item())
 
     writer.add_scalar('test_psnr', np.mean(psnr), epoch)

@@ -3,9 +3,10 @@ import os
 #!/bin/bash
 
 gffm_pos,gffm_dir = 1000, 6
-map_sizes = [64]
+map_sizes = [4096]
 for map_size in map_sizes:
-    cmd = f'python residual_regression.py --model gffm --config ./configs/materials_random.txt --exp materials_random --gffm_pos {gffm_pos} --gffm_dir {gffm_dir} --gffm_map_size {map_size} --use_batch'
+    cmd = f'python residual_regression.py --model gffm --config ./configs/materials_random.txt --exp materials_random --gffm_pos {gffm_pos} \
+    --gffm_dir {gffm_dir} --gffm_map_size {map_size} --use_batch --expname gffm-use-batch'
     print(cmd)
     os.system(cmd)
 
