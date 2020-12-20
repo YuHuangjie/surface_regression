@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Iglad/include -Iinclude -fpic -std=c++11
+CFLAGS = -Iglad/include -Iinclude -fpic
 LDFLAGS = -lEGL -ldl -shared
 TARGET = rsh.so
 
