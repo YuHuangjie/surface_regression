@@ -1,6 +1,6 @@
-logdir=logs/materials
+logdir=logs/ship
 datatype=blender
-exp=materials
+exp=ship
 
 sh_level=-1
 
@@ -12,12 +12,12 @@ batch_rays=200000
 
 epochs_til_ckpt=100
 steps_til_summary=400
-train_images=800
+train_images=100
 test_images=200
 
 model=gffm
-ffm_map_size=4096
+ffm_map_size=2048
 ffm_map_scale=3
-gffm_map_size=8192
+gffm_map_size=4096
 gffm_pos=128
 gffm_dir=3

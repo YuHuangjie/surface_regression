@@ -26,6 +26,7 @@ p.add_argument('--restart', action='store_true', help='do not reload from checkp
 p.add_argument('--datatype', type=str, default='blender',help='data loader type (blender or dslf)')
 p.add_argument('--exp', type=str, required=True, help='identifier of training data (e.g. lucy)')
 p.add_argument('--sh_level', type=int, default=3, help='order of SH basis (0-3)')   
+p.add_argument('--batch_rays', type=int, default=100000, help='number of rays per batch')   
 
 # General training options
 p.add_argument('--lr', type=float, default=1e-4, help='learning rate. default=1e-4')
@@ -63,17 +64,17 @@ data_dir = f'data/{args.exp}'
 if datatype == 'blender':
     train_part = [f'./train/r_{i}' for i in range(args.train_images)]
     test_part =   [f'./test/r_{i}' for i in range(args.test_images)]
-    train_params = {'shuffle': True, 'num_workers': 0, 'pin_memory': True,}
+    train_params = {'shuffle': True, 'num_workers': 24, 'pin_memory': True, 'persistent_workers': True}
     test_params = {'shuffle': False, 'num_workers': 0, 'pin_memory': False,}
     obj_path = f'{data_dir}/{args.exp}-sh.obj'
 
     if not args.test_only:
         train_set = Dataset(datatype, data_dir, obj_path, train_part, 
-                    'transforms_train.json', L=args.sh_level)
+                    'transforms_train.json', L=args.sh_level, train=True, n_rays=args.batch_rays)
         train_dataloader = torch.utils.data.DataLoader(train_set, **train_params)
 
     test_set = Dataset(datatype, data_dir, obj_path, test_part, 
-                    'transforms_test.json', L=args.sh_level)
+                    'transforms_test.json', L=args.sh_level, train=False)
     test_dataloader = torch.utils.data.DataLoader(test_set, **test_params)
 else:
     raise NotImplementedError
