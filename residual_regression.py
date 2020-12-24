@@ -64,17 +64,17 @@ data_dir = f'data/{args.exp}'
 if datatype == 'blender':
     train_part = [f'./train/r_{i}' for i in range(args.train_images)]
     test_part =   [f'./test/r_{i}' for i in range(args.test_images)]
-    train_params = {'shuffle': True, 'num_workers': 24, 'pin_memory': True, 'persistent_workers': True}
+    train_params = {'shuffle': True, 'num_workers': 0, 'pin_memory': True,}
     test_params = {'shuffle': False, 'num_workers': 0, 'pin_memory': False,}
     obj_path = f'{data_dir}/{args.exp}-sh.obj'
 
     if not args.test_only:
         train_set = Dataset(datatype, data_dir, obj_path, train_part, 
-                    'transforms_train.json', L=args.sh_level, train=True, n_rays=args.batch_rays)
+                    'transforms_train.json', L=args.sh_level, randomize=True, batchsize=args.batch_rays)
         train_dataloader = torch.utils.data.DataLoader(train_set, **train_params)
 
     test_set = Dataset(datatype, data_dir, obj_path, test_part, 
-                    'transforms_test.json', L=args.sh_level, train=False)
+                    'transforms_test.json', L=args.sh_level, randomize=False)
     test_dataloader = torch.utils.data.DataLoader(test_set, **test_params)
 else:
     raise NotImplementedError
@@ -144,7 +144,10 @@ for mt in args.model:
     with torch.no_grad():
         for i, (x, residual, mask, approx) in enumerate(test_dataloader):
             x, residual = x.cuda(), residual.cuda()
-            y = model_pred(model, x)
+            y = []
+            for j in range(x.shape[1] // args.batch_rays + 1):
+                y.append(model_pred(model, x[0, args.batch_rays*j:args.batch_rays*(j+1)]))
+            y = torch.cat(y)
             img = torch.zeros((dsize[0]*dsize[1], 3))
             img[mask[0]] = y.cpu() + approx[0].cpu()
             img = np.clip(img.numpy() * 255., 0, 255).astype(np.uint8)
