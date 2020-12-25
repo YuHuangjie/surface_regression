@@ -75,7 +75,7 @@ def train(model, train_dataloader, lr, epochs, logdir, epochs_til_checkpoint=10,
 
                 # evaludate
                 total_loss += train_loss.item()
-                if not total_steps % steps_til_summary:
+                if not total_steps % steps_til_summary and total_steps != 0:
                     total_loss /= steps_til_summary
                     tqdm.write(f"Epoch {epoch}, Total loss {total_loss:.6}, PSNR {model_psnr(torch.Tensor([total_loss])).item()}, iteration time {time.time()-start_time:.6}")
                     total_loss = 0
