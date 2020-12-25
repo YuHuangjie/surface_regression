@@ -160,3 +160,5 @@ for mt in args.model:
     # save test psnrs
     np.savetxt(f'{output_dir}/test_psnr.txt', psnr, newline=',\n')
     np.save(f'{output_dir}/test_psnr.npy', psnr)
+    print(f'validation mean PSNR: {psnr.mean()}')
+    
