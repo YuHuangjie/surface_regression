@@ -1,13 +1,14 @@
-logdir=logs/lucy_down
+logdir=logs/lucy2
 datatype=blender
-exp=lucy_down
+exp=lucy2
 
 sh_level=-1
 
 lr=1e-4
-num_epochs=1000
+num_epochs=200
 net_depth=8
 net_width=256
+batch_rays=100000
 
 epochs_til_ckpt=100
 steps_til_summary=400
@@ -16,7 +17,7 @@ test_images=200
 
 model=gffm
 ffm_map_size=4096
-ffm_map_scale=10
+ffm_map_scale=4
 gffm_map_size=8192
-gffm_pos=1000
-gffm_dir=6
+gffm_pos=2048
+gffm_dir=3

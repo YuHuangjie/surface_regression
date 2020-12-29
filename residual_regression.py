@@ -53,7 +53,7 @@ p.add_argument('--gffm_map_size', type=int, default=4096,
                help='mapping dimension of gffm')
 p.add_argument('--gffm_pos', type=float, default=1000,
                help='mapping dimension of gffm')
-p.add_argument('--gffm_dir', type=int, default=6,
+p.add_argument('--gffm_dir', type=float, default=6,
                help='mapping dimension of gffm')
 args = p.parse_args()
 
@@ -160,5 +160,5 @@ for mt in args.model:
     # save test psnrs
     np.savetxt(f'{output_dir}/test_psnr.txt', psnr, newline=',\n')
     np.save(f'{output_dir}/test_psnr.npy', psnr)
-    print(f'validation mean PSNR: {psnr.mean()}')
+    print(f'validation mean PSNR: {np.array(psnr).mean()}')
     

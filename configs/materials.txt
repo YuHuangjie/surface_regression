@@ -5,10 +5,10 @@ exp=materials
 sh_level=-1
 
 lr=1e-4
-num_epochs=400
+num_epochs=200
 net_depth=8
 net_width=256
-batch_rays=150000
+batch_rays=100000
 
 epochs_til_ckpt=100
 steps_til_summary=400
