@@ -64,20 +64,28 @@ data_dir = f'data/{args.exp}'
 if datatype == 'blender':
     train_part = [f'./train/r_{i}' for i in range(args.train_images)]
     test_part =   [f'./test/r_{i}' for i in range(args.test_images)]
-    train_params = {'shuffle': True, 'num_workers': 0, 'pin_memory': True,}
-    test_params = {'shuffle': False, 'num_workers': 0, 'pin_memory': False,}
-    obj_path = f'{data_dir}/{args.exp}-sh.obj'
-
-    if not args.test_only:
-        train_set = Dataset(datatype, data_dir, obj_path, train_part, 
-                    'transforms_train.json', L=args.sh_level, randomize=True, batchsize=args.batch_rays)
-        train_dataloader = torch.utils.data.DataLoader(train_set, **train_params)
-
-    test_set = Dataset(datatype, data_dir, obj_path, test_part, 
-                    'transforms_test.json', L=args.sh_level, randomize=False)
-    test_dataloader = torch.utils.data.DataLoader(test_set, **test_params)
+    train_profile = 'transforms_train.json'
+    test_profile = 'transforms_test.json'
+elif datatype == 'dslf':
+    train_part = [f'{i}' for i in range(args.train_images)]
+    test_part = [f'{i}' for i in range(args.test_images)]
+    train_profile = 'cameras_train.json'
+    test_profile = 'cameras_test.json'
 else:
     raise NotImplementedError
+
+train_params = {'shuffle': True, 'num_workers': 0, 'pin_memory': True,}
+test_params = {'shuffle': False, 'num_workers': 0, 'pin_memory': False,}
+obj_path = f'{data_dir}/{args.exp}-sh.obj'
+
+if not args.test_only:
+    train_set = Dataset(datatype, data_dir, obj_path, train_part, 
+                train_profile, L=args.sh_level, randomize=True, batchsize=args.batch_rays)
+    train_dataloader = torch.utils.data.DataLoader(train_set, **train_params)
+
+test_set = Dataset(datatype, data_dir, obj_path, test_part, 
+                test_profile, L=args.sh_level, randomize=False)
+test_dataloader = torch.utils.data.DataLoader(test_set, **test_params)
 
 # train each model configuration
 for mt in args.model:

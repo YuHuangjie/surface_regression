@@ -24,6 +24,7 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
         self.labels = {}
         self.residuals = {}
         self.approx = {}
+        self.alphas = {}
 
         if dataset == 'dslf':
             self.list_c2ws, self.list_Ks, self.list_images = load_dslf_config(
@@ -38,8 +39,9 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
         print('Stage: loading images')
         for id in tqdm(list_ids):
             imagepath = self.list_images[id]
-            I = imageio.imread(imagepath, pilmode='RGB')
-            I = (np.array(I) / 255.).astype(np.float32)
+            I = imageio.imread(imagepath)
+            self.alphas[id] = I[:,:,3]==255 if I.shape[2] == 4 else None
+            I = (np.array(I[:,:,:3]) / 255.).astype(np.float32)
             self.H, self.W = I.shape[:2]
             self.labels[id] = I.reshape((-1, 3))
 
@@ -61,6 +63,7 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
             if self.randomize:
                 self.labels[id] = self.labels[id][self.masks[id]]
         del self.depths
+        del self.alphas
 
         # render 'objmesh' using per-vertex color
         print('Stage: render SH approximation')
@@ -113,6 +116,8 @@ class ApproxResSurfaceDataset(torch.utils.data.Dataset):
         vcoords = np.arange(self.H, dtype=np.float32)
         uvd = np.concatenate([np.stack(np.meshgrid(ucoords, vcoords), -1).reshape(-1, 2), depth], axis=1)
         mask = uvd[:, 2] != 0.
+        if self.alphas[id] is not None:
+            mask &= np.reshape(self.alphas[id], (-1,))
         uvd = uvd[mask]
         uvd[:,:2] = uvd[:,:2] * uvd[:,2:3]
         x_train = np.matmul(uvd, np.matmul(c2w[:3,:3], np.linalg.inv(K)).T) + c2w[:3, 3].T
