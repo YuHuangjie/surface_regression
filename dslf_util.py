@@ -33,6 +33,7 @@ def load_dslf_config(datadir, profile_file):
         for i in range(16):
             M[i] = float(extrinsic[i])
         M = np.reshape(M, (4,4))
+        M = np.linalg.inv(M)    # need c2w
         list_poses[tag] = M.astype(np.float32)
 
     return (list_poses, list_Ks, list_images)

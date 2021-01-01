@@ -1,6 +1,6 @@
-logdir=logs/tangsancai
+logdir=logs/beer
 datatype=dslf
-exp=tangsancai
+exp=beer
 
 sh_level=-1
 
@@ -12,12 +12,12 @@ batch_rays=100000
 
 epochs_til_ckpt=100
 steps_til_summary=400
-train_images=741
-test_images=82
+train_images=333
+test_images=37
 
 model=gffm
 ffm_map_size=4096
 ffm_map_scale=4
 gffm_map_size=8192
 gffm_pos=256
-gffm_dir=3
+gffm_dir=2
