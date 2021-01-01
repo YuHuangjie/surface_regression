@@ -70,6 +70,33 @@ class MLP(nn.Module):
             h = F.relu(h)
         outputs = self.output_linear(h)
         return outputs
+
+class DSLF(nn.Module):
+    def __init__(self):
+        super(DSLF, self).__init__()
+
+        self.FC_1 = nn.ModuleList([nn.Linear(3, 512)] + [nn.Linear(512, 256)])
+        self.FC_2 = nn.ModuleList([nn.Linear(3, 512)] + [nn.Linear(512, 256)])
+        self.final = nn.ModuleList([nn.Linear(512, 1024)] + [nn.Linear(1024, 256)] + \
+                                   [nn.Linear(256, 128)])
+        self.output = nn.Linear(128, 3)
+
+    def forward(self, x):
+        h1 = x[..., :3]
+        for l in self.FC_1:
+            h1 = l(h1)
+            h1 = F.relu(h1)
+        h2 = x[..., 3:]
+        for l in self.FC_2:
+            h2 = l(h2)
+            h2 = F.relu(h2)
+        h = torch.cat((h1, h2), dim=-1)
+        for l in self.final:
+            h = l(h)
+            h = F.relu(h)
+        outputs = self.output(h)
+
+        return outputs
     
 def make_ffm_network(D, W, B=None):
     map = FFM(B)
@@ -82,3 +109,6 @@ def make_rff_network(D, W, We, b):
 def make_relu_network(D, W):
     map = NoMap()
     return MLP(D, W, map).float()
+
+def make_dslf_network():
+    return DSLF().float()

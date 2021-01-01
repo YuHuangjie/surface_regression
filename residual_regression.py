@@ -44,7 +44,7 @@ p.add_argument('--test_images', type=int, default=200,
                 help='number of testing images')
 
 p.add_argument('--model', type=str, action='append', required=True,
-               help='Options available are "relu", "ffm", "gffm"')
+               help='Options available are "relu", "ffm", "gffm", "dslf"')
 p.add_argument('--ffm_map_size', type=int, default=1024,
                help='mapping dimension of ffm')
 p.add_argument('--ffm_map_scale', type=float, default=10,
@@ -129,6 +129,8 @@ for mt in args.model:
             (W, b) = model_params
         model = make_rff_network(*network_size, W, b)
         model_params = (W, b)
+    elif mt == 'dslf':
+        model = make_dslf_network()
     else:
         raise NotImplementedError
 

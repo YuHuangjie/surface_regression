@@ -8,7 +8,7 @@
 
 Renderer::Renderer()
 	: mNear(0.1f),
-	mFar(10.f),	// change accordingly
+	mFar(1000.f),	// change accordingly
 	mMaxL(0),
 	mL(0),
 	mnMeshes(0),
