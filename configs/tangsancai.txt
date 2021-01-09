@@ -19,5 +19,5 @@ model=gffm
 ffm_map_size=4096
 ffm_map_scale=4
 gffm_map_size=8192
-gffm_pos=256
+gffm_pos=16
 gffm_dir=3
