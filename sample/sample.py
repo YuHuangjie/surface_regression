@@ -26,26 +26,39 @@ def slf_sample(lib, a_pos, a_dir, N):
     We first take the Fourier transform of K and regard it as a (unnormalized)
     probability distribution. We then sample from it.
     '''
-    # First determine the range of radius. Too large radius leads to very small
-    # frequency, and therefore difficult to apply rejection sampling.
-    radius = np.linspace(0, 20, 21) * 10
-
-    for i, r in enumerate(radius):
-        c = np.array([r, a_dir])
+    frq_r_pos = np.linspace(0, 100, 21) * 10
+    power = 1
+    for i, fr in enumerate(frq_r_pos):
+        c = np.array([fr, a_pos, power])
         user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
-        func = LowLevelCallable(lib.integrand_dir, user_data)
-        if integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0] < 1e-3:
+        func = LowLevelCallable(lib.integrand_pos, user_data)
+        if integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0] < 1e-5:
             break
-    R_d = np.linspace(0, radius[i], int(radius[i]) if int(radius[i]) > 40 else 40)
-
-    # Take the fourier transform of directional kernel. Store the transform as a
-    # function of the norm of frequency.
-    F_d = np.zeros_like(R_d)
-    for i, r in enumerate(R_d):
-        c = np.array([r, a_dir])
+    print(frq_r_pos[i])
+    frq_r_pos = np.linspace(0, frq_r_pos[i], int(frq_r_pos[i]) if int(frq_r_pos[i]) > 40 else 40)
+    freq_pos = np.zeros_like(frq_r_pos)
+    for i, fr in enumerate(frq_r_pos):
+        c = np.array([fr, a_pos, power])
+        user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
+        func = LowLevelCallable(lib.integrand_pos, user_data)
+        freq_pos[i] = integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0]
+    ###
+    ###
+    frq_r_dir = np.linspace(0, 100, 21) * 10
+    for i, fr in enumerate(frq_r_dir):
+        c = np.array([fr, a_dir])
         user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
         func = LowLevelCallable(lib.integrand_dir, user_data)
-        F_d[i] = integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0]
+        if integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0] < 1e-5:
+            break
+    print(frq_r_dir[i])
+    frq_r_dir = np.linspace(0, frq_r_dir[i], int(frq_r_dir[i]) if int(frq_r_dir[i]) > 40 else 40)
+    freq_dir = np.zeros_like(frq_r_dir)
+    for i, fr in enumerate(frq_r_dir):
+        c = np.array([fr, a_dir])
+        user_data = cast(c.ctypes.data_as(POINTER(c_double)), c_void_p)
+        func = LowLevelCallable(lib.integrand_dir, user_data)
+        freq_dir[i] = integrate.nquad(func, [[-2, 2], [-2, 2], [-2, 2]])[0]
 
     # perform rejection sampling
     samples = np.zeros((N*2, 6))
@@ -54,10 +67,11 @@ def slf_sample(lib, a_pos, a_dir, N):
     print('perform rejection sampling')
     
     while i < N:
-        x,y,z = np.random.uniform(-a_pos*10, a_pos*10, (3, N))
-        dx,dy,dz = np.random.uniform(-R_d[-1], R_d[-1], (3, N))
-        p = np.random.uniform(0, (1/a_pos**3)*F_d[0], N)
-        u = (a_pos/(a_pos**2+(x**2+y**2+z**2))**2) * np.interp((dx*dx+dy*dy+dz*dz)**0.5, R_d, F_d, right=0)
+        x,y,z = np.random.uniform(-frq_r_pos[-1], frq_r_pos[-1], (3, N*10))
+        dx,dy,dz = np.random.uniform(-frq_r_dir[-1], frq_r_dir[-1], (3, N*10))
+        p = np.random.uniform(0, freq_pos[0]*freq_dir[0], N*10)
+        u = np.interp((x*x+y*y+z*z)**0.5, frq_r_pos, freq_pos, right=0) \
+            * np.interp((dx*dx+dy*dy+dz*dz)**0.5, frq_r_dir, freq_dir, right=0)
 
         mask = p < u
         if mask.sum() > 0:
